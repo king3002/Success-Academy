@@ -63,25 +63,31 @@ app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
 
-const nodemailer = require('nodemailer');
 
 // Temporary in-memory storage for OTPs (In production, use Redis or a database table)
 const otpStore = new Map();
 
-// Setup Nodemailer Transporter (Replace with your actual Gmail and App Password)
-// Note: You must enable "App Passwords" in your Google Account security settings.
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true, // Use SSL
-    auth: {
-        user: 'kp30023002@gmail.com',
-        pass: process.env.EMAIL_PASS
-    },
-    tls: {
-        rejectUnauthorized: false // Helps bypass strict local network firewalls
+// --- NEW BREVO EMAIL FUNCTION ---
+async function sendEmail(toEmail, toName, subject, textContent) {
+    try {
+        await axios.post('https://api.brevo.com/v3/smtp/email', {
+            sender: { name: "Success Academy", email: "kp30023002@gmail.com" },
+            to: [{ email: toEmail, name: toName }],
+            subject: subject,
+            textContent: textContent
+        }, {
+            headers: {
+                'accept': 'application/json',
+                'api-key': process.env.BREVO_API_KEY,
+                'content-type': 'application/json'
+            }
+        });
+        console.log("✅ Email sent successfully via Brevo!");
+    } catch (error) {
+        console.error("❌ Brevo Email Error:", error.response ? error.response.data : error.message);
+        throw new Error("Failed to send email");
     }
-});
+}
 
 // --- NEW ROUTE: Send OTP ---
 app.post('/api/send-otp', async (req, res) => {
@@ -94,12 +100,12 @@ app.post('/api/send-otp', async (req, res) => {
     otpStore.set(email, { otp: otp, expires: Date.now() + 300000 });
 
     try {
-        await transporter.sendMail({
-            from: 'kp30023002@gmail.com',
-            to: email,
-            subject: 'Success Academy - Registration OTP',
-            text: `Hello ${name},\n\nYour OTP for Success Academy registration is: ${otp}\nThis OTP is valid for 5 minutes.`
-        });
+        await sendEmail(
+            email, 
+            name, 
+            'Success Academy - Registration OTP', 
+            `Hello ${name},\n\nYour OTP for Success Academy registration is: ${otp}\nThis OTP is valid for 5 minutes.`
+        );
         res.json({ success: true, message: 'OTP sent successfully!' });
     } catch (error) {
         console.error('Email Error:', error);
@@ -243,12 +249,12 @@ app.post('/api/admin/approve-student',verifyAdmin, async (req, res) => {
         );
 
         // Send the welcome email (since we dropped SMS)
-        await transporter.sendMail({
-            from: '"Success Academy" <kp30023002@gmail.com>',
-            to: student.email,
-            subject: 'Admission Approved! Your Login Credentials',
-            text: `Dear ${student.name},\n\nCongratulations! Your admission to Success Academy has been approved.\n\nHere are your official student portal login details:\n\nRegistration Number (User ID): ${reg_no}\nPassword: ${password}\n\nPlease keep these safe.\n\nBest Regards,\nSuccess Academy Team`
-        });
+        await sendEmail(
+            student.email, 
+            student.name, 
+            'Admission Approved! Your Login Credentials', 
+            `Dear ${student.name},\n\nCongratulations! Your admission to Success Academy has been approved.\n\nHere are your official student portal login details:\n\nRegistration Number (User ID): ${reg_no}\nPassword: ${password}\n\nPlease keep these safe.\n\nBest Regards,\nSuccess Academy Team`
+        );
 
         res.json({ success: true, message: 'Student Approved!', credentials: { reg_no, password } });
 
@@ -914,12 +920,12 @@ app.post('/api/admin/public-inquiries/reply', verifyAdmin, async (req, res) => {
 
     try {
         // Send actual email to the visitor
-        await transporter.sendMail({
-            from: '"Success Academy" <kp30023002@gmail.com>',
-            to: email,
-            subject: 'Reply to your inquiry - Success Academy',
-            text: `Dear ${name},\n\nThank you for reaching out to Success Academy.\n\n${admin_reply}\n\nBest Regards,\nSuccess Academy Administration`
-        });
+        await sendEmail(
+            email, 
+            name, 
+            'Reply to your inquiry - Success Academy', 
+            `Dear ${name},\n\nThank you for reaching out to Success Academy.\n\n${admin_reply}\n\nBest Regards,\nSuccess Academy Administration`
+        );
 
         // Update database status to Replied
         db.query(`UPDATE public_inquiries SET status = 'Replied' WHERE id = ?`, [id], (err) => {
