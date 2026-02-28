@@ -70,10 +70,15 @@ const otpStore = new Map();
 // Setup Nodemailer Transporter (Replace with your actual Gmail and App Password)
 // Note: You must enable "App Passwords" in your Google Account security settings.
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true, // Use SSL
     auth: {
         user: 'kp30023002@gmail.com',
-        pass: process.env.EMAIL_PASS // 16-character app password
+        pass: process.env.EMAIL_PASS
+    },
+    tls: {
+        rejectUnauthorized: false // Helps bypass strict local network firewalls
     }
 });
 
