@@ -1271,3 +1271,41 @@ cron.schedule('0 * * * *', async () => {
         console.error("❌ Token cleanup failed:", error);
     }
 });
+// ==========================================
+// INDIVIDUAL EXAM LEADERBOARD API
+// ==========================================
+app.get('/api/leaderboard/exam', (req, res) => {
+    const { date, subject } = req.query;
+
+    if (!date || !subject) {
+        return res.status(400).json({ error: "Missing date or subject" });
+    }
+
+    // SQL query to fetch marks and calculate rank among peers for that specific test
+    const query = `
+        SELECT 
+            u.name, 
+            u.reg_no, 
+            m1.marks_obtained, 
+            m1.total_marks,
+            (
+                SELECT COUNT(DISTINCT m2.marks_obtained) + 1 
+                FROM marks m2 
+                WHERE m2.exam_date = m1.exam_date 
+                  AND m2.subject = m1.subject 
+                  AND m2.marks_obtained > m1.marks_obtained
+            ) as \`rank\`
+        FROM marks m1
+        JOIN users u ON m1.student_id = u.id
+        WHERE m1.exam_date = ? AND m1.subject = ?
+        ORDER BY m1.marks_obtained DESC
+    `;
+
+    db.query(query, [date, subject], (err, results) => {
+        if (err) {
+            console.error('Exam Leaderboard Error:', err);
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json(results);
+    });
+});
