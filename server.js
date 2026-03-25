@@ -447,7 +447,7 @@ app.get('/api/student/events', (req, res) => {
     // AND target 'All' types or the specific batch type.
     const query = `
         SELECT * FROM global_events 
-        WHERE (target_standard = 'Both' OR target_standard = ?) 
+        WHERE (target_standard = 'All' OR target_standard = ?) 
         AND (target_type = 'All' OR target_type = ?)
         ORDER BY event_date ASC
     `;
