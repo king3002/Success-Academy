@@ -1309,3 +1309,38 @@ app.get('/api/leaderboard/exam', (req, res) => {
         res.json(results);
     });
 });
+// ==========================================
+// DAILY TIMETABLE APIs
+// ==========================================
+
+// ADMIN: Add a new schedule slot
+app.post('/api/admin/timetable', verifyAdmin, async (req, res) => {
+    const { target_date, start_time, end_time, subject, topic, target_standard, target_type } = req.body;
+    const query = `INSERT INTO daily_timetable (target_date, start_time, end_time, subject, topic, target_standard, target_type) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+    
+    db.query(query, [target_date, start_time, end_time, subject, topic, target_standard, target_type], (err, result) => {
+        if (err) {
+            console.error('Timetable Error:', err);
+            return res.status(500).json({ success: false, error: 'Database error' });
+        }
+        res.json({ success: true, message: 'Schedule updated!' });
+    });
+});
+
+// STUDENT: Fetch schedule for today
+app.get('/api/student/timetable', (req, res) => {
+    const { standard, type, date } = req.query;
+    
+    const query = `
+        SELECT * FROM daily_timetable 
+        WHERE target_date = ? 
+        AND (target_standard = 'All' OR target_standard = ?) 
+        AND (target_type = 'All' OR target_type = ?)
+        ORDER BY start_time ASC
+    `;
+    
+    db.query(query, [date, standard, type], (err, results) => {
+        if (err) return res.status(500).json({ error: 'Database error' });
+        res.json(results);
+    });
+});
