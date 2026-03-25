@@ -613,31 +613,38 @@ app.post('/api/admin/attendance', verifyAdmin, async (req, res) => {
     }
 });
 // ==========================================
-// ADMIN: PUBLISH NOTICE
+// ADMIN: PUBLISH NOTICE (Updated for Multi-Select)
 // ==========================================
 app.post('/api/admin/publish-notice', verifyAdmin, async (req, res) => {
     const { noticeType, targetRegNo, title, content } = req.body;
 
     try {
-        if (targetRegNo) {
-            // Send to specific student
+        // If specific students are selected (targetRegNo is an array with items)
+        if (targetRegNo && Array.isArray(targetRegNo) && targetRegNo.length > 0) {
+            
+            // Create SQL placeholders (?, ?, ?) based on array length
+            const placeholders = targetRegNo.map(() => '?').join(',');
+            
             const [users] = await db.promise().query(
-                `SELECT id FROM users WHERE reg_no = ?`,
-                [targetRegNo]
+                `SELECT id FROM users WHERE reg_no IN (${placeholders})`,
+                targetRegNo
             );
 
             if (users.length === 0) {
-                return res.status(404).json({ error: "Student not found" });
+                return res.status(404).json({ error: "No matching students found." });
             }
 
-            await db.promise().query(
-                `INSERT INTO personal_notices (student_id, title, message, notice_type) VALUES (?, ?, ?, ?)`,
-                [users[0].id, title, content, noticeType]
-            );
+            // Insert a notice for every selected student
+            for (let user of users) {
+                await db.promise().query(
+                    `INSERT INTO personal_notices (student_id, title, message, notice_type) VALUES (?, ?, ?, ?)`,
+                    [user.id, title, content, noticeType]
+                );
+            }
         } else {
-            // Send to all students
+            // If nothing was selected, send to ALL ACTIVE students
             const [students] = await db.promise().query(
-                `SELECT id FROM users WHERE role='student'`
+                `SELECT id FROM users WHERE role='student' AND (status = 'Active' OR status IS NULL)`
             );
 
             for (let student of students) {
@@ -651,8 +658,8 @@ app.post('/api/admin/publish-notice', verifyAdmin, async (req, res) => {
         res.json({ success: true, message: "Notice Published Successfully" });
 
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: "Server error" });
+        console.error("Publish Notice Error:", error);
+        res.status(500).json({ error: "Server error while publishing notice." });
     }
 });
 
