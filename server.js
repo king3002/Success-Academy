@@ -403,9 +403,28 @@ app.get('/api/student/dashboard/:id', async (req, res) => {
             [studentId]
         );
 
-        // 4. Get Recent Marks
+        // 4. Get Recent Marks with RANK calculation
+        // This query finds the rank by counting how many students got a higher score 
+        // in the EXACT same exam (Title, Date, Subject, and Standard).
         const [marks] = await db.promise().query(
-            `SELECT exam_title, subject, marks_obtained, total_marks, exam_date FROM marks WHERE student_id = ? ORDER BY exam_date DESC`,
+            `SELECT 
+                m1.exam_title, 
+                m1.subject, 
+                m1.marks_obtained, 
+                m1.total_marks, 
+                m1.exam_date,
+                (
+                    SELECT COUNT(DISTINCT m2.marks_obtained) + 1 
+                    FROM marks m2 
+                    WHERE m2.exam_title = m1.exam_title 
+                      AND m2.exam_date = m1.exam_date 
+                      AND m2.subject = m1.subject 
+                      AND m2.standard = m1.standard
+                      AND m2.marks_obtained > m1.marks_obtained
+                ) as rank
+            FROM marks m1 
+            WHERE m1.student_id = ? 
+            ORDER BY m1.exam_date DESC`,
             [studentId]
         );
 
