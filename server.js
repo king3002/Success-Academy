@@ -406,27 +406,28 @@ app.get('/api/student/dashboard/:id', async (req, res) => {
         // 4. Get Recent Marks with RANK calculation
         // This query finds the rank by counting how many students got a higher score 
         // in the EXACT same exam (Title, Date, Subject, and Standard).
-        const [marks] = await db.promise().query(
-            `SELECT 
-                m1.exam_title, 
-                m1.subject, 
-                m1.marks_obtained, 
-                m1.total_marks, 
-                m1.exam_date,
-                (
-                    SELECT COUNT(DISTINCT m2.marks_obtained) + 1 
-                    FROM marks m2 
-                    WHERE m2.exam_title = m1.exam_title 
-                      AND m2.exam_date = m1.exam_date 
-                      AND m2.subject = m1.subject 
-                      AND m2.standard = m1.standard
-                      AND m2.marks_obtained > m1.marks_obtained
-                ) as rank
-            FROM marks m1 
-            WHERE m1.student_id = ? 
-            ORDER BY m1.exam_date DESC`,
-            [studentId]
-        );
+       // 4. Get Recent Marks with RANK calculation (Fixed with backticks)
+const [marks] = await db.promise().query(
+    `SELECT 
+        m1.exam_title, 
+        m1.subject, 
+        m1.marks_obtained, 
+        m1.total_marks, 
+        m1.exam_date,
+        (
+            SELECT COUNT(DISTINCT m2.marks_obtained) + 1 
+            FROM marks m2 
+            WHERE m2.exam_title = m1.exam_title 
+              AND m2.exam_date = m1.exam_date 
+              AND m2.subject = m1.subject 
+              AND m2.standard = m1.standard
+              AND m2.marks_obtained > m1.marks_obtained
+        ) as \`rank\`  -- Added backticks here to avoid reserved keyword error
+    FROM marks m1 
+    WHERE m1.student_id = ? 
+    ORDER BY m1.exam_date DESC`,
+    [studentId]
+);
 
         res.json({
             success: true,
