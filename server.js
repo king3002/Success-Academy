@@ -30,7 +30,10 @@ const verifyAdmin = (req, res, next) => {
 };
 
 // Use the cloud database URL (we will give this to Render later)
-const db = mysql.createPool(process.env.DATABASE_URL);
+const db = mysql.createPool({
+    uri: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+});
 
 // Test the database connection
 db.getConnection((err, connection) => {
@@ -163,6 +166,15 @@ app.post('/api/login', async (req, res) => {
         );
 
         if (results.length === 0) {
+            // Debug: check if user exists at all (without password/approval filter)
+            const [debugCheck] = await db.promise().query(
+                `SELECT reg_no, is_approved, password FROM users WHERE reg_no = ?`, [reg_no]
+            );
+            if (debugCheck.length === 0) {
+                console.log(`[LOGIN FAIL] reg_no not found: ${reg_no}`);
+            } else {
+                console.log(`[LOGIN FAIL] reg_no: ${reg_no}, is_approved: ${debugCheck[0].is_approved}, password_match: ${debugCheck[0].password === password}`);
+            }
             return res.status(401).json({ success: false, error: 'Invalid Registration Number or Password, or account not approved yet.' });
         }
 
