@@ -189,25 +189,29 @@ app.post('/api/login', async (req, res) => {
 
         // Device limit check (skip for admins)
         if (user.role === 'student' && device_id) {
-            const [devices] = await db.promise().query(
-                `SELECT device_id FROM user_devices WHERE user_id = ?`,
-                [user.id]
-            );
-
-            const knownDevices = devices.map(d => d.device_id);
-            const isKnown = knownDevices.includes(device_id);
-
-            if (!isKnown) {
-                if (knownDevices.length >= 2) {
-                    return res.status(403).json({ 
-                        success: false, 
-                        error: 'Login limit reached. This account is already active on 2 devices. Contact admin to reset.' 
-                    });
-                }
-                await db.promise().query(
-                    `INSERT INTO user_devices (user_id, device_id) VALUES (?, ?)`,
-                    [user.id, device_id]
+            try {
+                const [devices] = await db.promise().query(
+                    `SELECT device_id FROM user_devices WHERE user_id = ?`,
+                    [user.id]
                 );
+
+                const knownDevices = devices.map(d => d.device_id);
+                const isKnown = knownDevices.includes(device_id);
+
+                if (!isKnown) {
+                    if (knownDevices.length >= 2) {
+                        return res.status(403).json({ 
+                            success: false, 
+                            error: 'Login limit reached. This account is already active on 2 devices. Contact admin to reset.' 
+                        });
+                    }
+                    await db.promise().query(
+                        `INSERT INTO user_devices (user_id, device_id) VALUES (?, ?)`,
+                        [user.id, device_id]
+                    );
+                }
+            } catch (deviceErr) {
+                console.warn('[DEVICE CHECK] Skipped - table may not exist yet:', deviceErr.message);
             }
         }
 
