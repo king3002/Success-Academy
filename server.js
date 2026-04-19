@@ -153,49 +153,70 @@ app.post('/api/register', (req, res) => {
 // 2. LOGIN API (Admin & Student)
 // ==========================================
 // This replaces your hardcoded "1234" logic in Main.js
-app.post('/api/login', (req, res) => {
-    const { reg_no, password } = req.body;
+app.post('/api/login', async (req, res) => {
+    const { reg_no, password, device_id } = req.body;
 
-    // Ask MySQL: Does this user exist with this exact password?
-    const query = `SELECT * FROM users WHERE reg_no = ? AND password = ? AND is_approved = true`;
+    try {
+        const [results] = await db.promise().query(
+            `SELECT * FROM users WHERE reg_no = ? AND password = ? AND is_approved = true`,
+            [reg_no, password]
+        );
 
-    db.query(query, [reg_no, password], (err, results) => {
-        if (err) {
-            console.error('Login Error:', err);
-            return res.status(500).json({ error: 'Database error during login' });
+        if (results.length === 0) {
+            return res.status(401).json({ success: false, error: 'Invalid Registration Number or Password, or account not approved yet.' });
         }
 
-        // If results array has something, the user exists!
-        // If results array has something, the user exists!
-        if (results.length > 0) {
-            const user = results[0];
+        const user = results[0];
 
-            // NEW: Check if the student has graduated
-            if (user.status === 'Graduated') {
-                return res.status(403).json({ 
-                    success: false, 
-                    error: 'Thank you for choosing Success and trusting us to shape your future. Have a great journey in life ahead!' 
-                });
-            }
-
-            res.json({ 
-                success: true,
-                message: 'Login successful', 
-                user: {
-                    id: user.id,
-                    reg_no: user.reg_no,
-                    name: user.name,
-                    role: user.role,
-                    standard: user.standard,
-                    student_type: user.student_type,
-                    subject_group: user.subject_group
-                }
+        if (user.status === 'Graduated') {
+            return res.status(403).json({ 
+                success: false, 
+                error: 'Thank you for choosing Success and trusting us to shape your future. Have a great journey in life ahead!' 
             });
-        } else {
-            // User not found or incorrect password
-            res.status(401).json({ success: false, error: 'Invalid Registration Number or Password, or account not approved yet.' });
         }
-    });
+
+        // Device limit check (skip for admins)
+        if (user.role === 'student' && device_id) {
+            const [devices] = await db.promise().query(
+                `SELECT device_id FROM user_devices WHERE user_id = ?`,
+                [user.id]
+            );
+
+            const knownDevices = devices.map(d => d.device_id);
+            const isKnown = knownDevices.includes(device_id);
+
+            if (!isKnown) {
+                if (knownDevices.length >= 2) {
+                    return res.status(403).json({ 
+                        success: false, 
+                        error: 'Login limit reached. This account is already active on 2 devices. Contact admin to reset.' 
+                    });
+                }
+                await db.promise().query(
+                    `INSERT INTO user_devices (user_id, device_id) VALUES (?, ?)`,
+                    [user.id, device_id]
+                );
+            }
+        }
+
+        res.json({ 
+            success: true,
+            message: 'Login successful', 
+            user: {
+                id: user.id,
+                reg_no: user.reg_no,
+                name: user.name,
+                role: user.role,
+                standard: user.standard,
+                student_type: user.student_type,
+                subject_group: user.subject_group
+            }
+        });
+
+    } catch (err) {
+        console.error('Login Error:', err);
+        res.status(500).json({ error: 'Database error during login' });
+    }
 });
 // ==========================================
 // 3. ADMIN: GET PENDING STUDENTS
@@ -888,6 +909,19 @@ app.delete('/api/admin/students/:id', verifyAdmin, async (req, res) => {
         connection.release();
         console.error(error);
         res.status(500).json({ error: "Permanent delete failed" });
+    }
+});
+
+// ==========================================
+// ADMIN: RESET STUDENT DEVICES
+// ==========================================
+app.delete('/api/admin/students/:id/devices', verifyAdmin, async (req, res) => {
+    const id = req.params.id;
+    try {
+        await db.promise().query(`DELETE FROM user_devices WHERE user_id = ?`, [id]);
+        res.json({ success: true, message: 'Device list cleared. Student can login on new devices.' });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to reset devices.' });
     }
 });
 
